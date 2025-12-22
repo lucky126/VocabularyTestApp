@@ -1,0 +1,101 @@
+@page "/paper-test"
+@inject WordService WordService
+@inject NavigationManager Navigation
+@using System.Text.Json
+
+<PageTitle>试卷模式测试</PageTitle>
+
+<div class="container" style="max-width: 900px; margin: 0 auto; padding: 20px;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <Title Level="2">单词测试卷</Title>
+        <Button Type="@ButtonType.Default" OnClick="@(() => Navigation.NavigateTo("/"))">放弃测试</Button>
+    </div>
+
+    @if (testWords.Any())
+    {
+        <Card Style="margin-bottom: 20px;">
+            <div style="margin-bottom: 16px;">
+                <Alert Type="@AlertType.Info" Message="说明" Description="请拿出纸笔，按照下方题目写下答案。完成后拍照上传进行核对。" ShowIcon="true" />
+            </div>
+
+            <div class="paper-content" style="font-size: 16px;">
+                <Row Gutter="24">
+                    @for (int i = 0; i < testWords.Count; i++)
+                    {
+                        var word = testWords[i];
+                        <AntDesign.Col Span="12" Style="margin-bottom: 20px; border-bottom: 1px dashed #eee; padding-bottom: 10px;">
+                            <span style="font-weight: bold; margin-right: 10px; color: #1890ff;">@word.Id.</span>
+                            @if (Mode == "EnToCn")
+                            {
+                                <span style="font-weight: 500;">@word.English</span> 
+                                <span style="color: #999; font-size: 14px; margin-left: 5px;">(@word.PartOfSpeech)</span>
+                            }
+                            else
+                            {
+                                <span style="font-weight: 500;">@word.Chinese</span>
+                            }
+                        </AntDesign.Col>
+                    }
+                </Row>
+            </div>
+        </Card>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <Button Type="@ButtonType.Primary" Size="@ButtonSize.Large" OnClick="GoToGrading">
+                我已完成，拍照上传
+            </Button>
+        </div>
+    }
+    else
+    {
+        <div style="text-align: center; padding: 50px;">
+            <Spin Size="@SpinSize.Large" Tip="正在生成试卷..." />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] [SupplyParameterFromQuery] public string? Mode { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public string? Method { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int Start { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int End { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int Count { get; set; }
+
+    private List<Word> testWords = new();
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrEmpty(Mode)) Mode = "EnToCn";
+        if (string.IsNullOrEmpty(Method)) Method = "Range";
+        if (Count < 5) Count = 10;
+
+        LoadWords();
+    }
+
+    private void LoadWords()
+    {
+        if (Method == "Range")
+        {
+            testWords = WordService.GetWordsByRange(Start, End);
+        }
+        else
+        {
+            // Random
+            int? s = (Start > 0) ? Start : null;
+            int? e = (End > 0) ? End : null;
+            testWords = WordService.GetRandomWords(Count, s, e);
+        }
+    }
+
+    private void GoToGrading()
+    {
+        // We need to pass the list of word IDs to the grading page.
+        // Query strings might be too long. We can store it in a temporary service or just pass IDs joined by comma if not too many.
+        // Or better, use a scoped service to hold session state.
+        // For simplicity, let's try passing IDs via query string if < 100 words, otherwise we might need a better way.
+        // Assuming typical test is 20-50 words. 50 ints is ~150-200 chars. Safe.
+        
+        var ids = string.Join(",", testWords.Select(w => w.Id));
+        Navigation.NavigateTo($"/paper-grading?mode={Mode}&ids={ids}");
+    }
+}

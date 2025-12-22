@@ -1,0 +1,221 @@
+@page "/stats"
+@inject WordService WordService
+@inject NavigationManager Navigation
+@inject MessageService Message
+@using AntDesign
+@using VocabularyTestApp.Data
+
+@inject ILogger<Stats> Logger
+
+<PageTitle>统计分析</PageTitle>
+
+<div style="margin-bottom: 16px; display: flex; justify-content: space-between;">
+    <Button Type="@ButtonType.Default" Icon="arrow-left" OnClick="@(() => Navigation.NavigateTo("/"))">
+        返回首页
+    </Button>
+    <Popconfirm Title="确定要重新计算统计数据吗？这将根据历史记录重建统计信息。"
+                OnConfirm="Recalculate"
+                OkText="确定"
+                CancelText="取消">
+        <Button Type="@ButtonType.Default" Icon="sync">
+            校准数据
+        </Button>
+    </Popconfirm>
+</div>
+
+<Tabs DefaultActiveKey="1">
+    <TabPane Key="1" Tab="历史测试记录">
+        <Table DataSource="@WordService.Stats.TestHistory.OrderByDescending(x => x.Date)" TItem="TestResult" Context="testResult">
+            <PropertyColumn Property="c=>c.Date" Format="yyyy-MM-dd HH:mm" Title="日期" Sortable />
+            <PropertyColumn Property="c=>c.Mode" Title="模式">
+                @if (testResult.Mode == "EnToCn")
+                {
+                    <Tag Color="@("blue")">英译中</Tag>
+                }
+                else
+                {
+                    <Tag Color="@("cyan")">中译英</Tag>
+                }
+            </PropertyColumn>
+            <PropertyColumn Property="c=>c.GradingMode" Title="评阅">
+                 @if (testResult.GradingMode == "Auto")
+                 {
+                     <Tag Color="@("purple")">自动</Tag>
+                 }
+                 else if (testResult.GradingMode == "Manual")
+                 {
+                     <Tag Color="@("orange")">人工</Tag>
+                 }
+                 else
+                 {
+                     <Tag Color="@("green")">交互</Tag>
+                 }
+            </PropertyColumn>
+            <ActionColumn Title="答卷">
+                @if (!string.IsNullOrEmpty(testResult.PaperImageBase64))
+                {
+                    <Button Type="@ButtonType.Link" OnClick="@(() => ShowPreview(testResult.PaperImageBase64))" Style="padding: 0; height: auto;">
+                         <img src="@testResult.PaperImageBase64" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #d9d9d9; border-radius: 4px;" />
+                    </Button>
+                }
+            </ActionColumn>
+            <PropertyColumn Property="c=>c.CorrectCount" Title="正确数" />
+            <PropertyColumn Property="c=>c.TotalQuestions" Title="总题数" />
+            <ActionColumn Title="正确率">
+                @{
+                    var accuracy = testResult.TotalQuestions == 0 ? 0 : Math.Round((double)testResult.CorrectCount / testResult.TotalQuestions * 100, 1);
+                }
+                <AntDesign.Progress Percent="@accuracy" Steps="5" StrokeColor="@GetProgressColor(accuracy)" />
+            </ActionColumn>
+            <ActionColumn Title="错题详情">
+                @if (testResult.WrongWordIds.Any())
+                {
+                    <Popover Title="错题列表" Trigger="@(new[] { Trigger.Click })">
+                        <ContentTemplate>
+                            <div style="max-height: 300px; overflow-y: auto; width: 300px;">
+                                <ul style="padding-left: 20px;">
+                                    @foreach (var w in GetWrongWords(testResult.WrongWordIds))
+                                    {
+                                        <li>
+                                             <strong>@w.English</strong> - @w.Chinese <br/>
+                                             <small>(@w.Id)</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </ContentTemplate>
+                        <ChildContent>
+                            <Button Size="@ButtonSize.Small" Type="@ButtonType.Link">查看 (@testResult.WrongWordIds.Count)</Button>
+                        </ChildContent>
+                    </Popover>
+                }
+                else
+                {
+                    <Tag Color="@("green")">全对</Tag>
+                }
+            </ActionColumn>
+            <ActionColumn Title="操作">
+                <Popconfirm Title="确定要删除这条记录吗？这将同时撤销相关的统计数据。"
+                            OnConfirm="@(() => DeleteRecord(testResult.Id))"
+                            OkText="删除"
+                            CancelText="取消">
+                    <Button Type="@ButtonType.Link" Danger Size="@ButtonSize.Small">删除</Button>
+                </Popconfirm>
+            </ActionColumn>
+        </Table>
+    </TabPane>
+    
+    <TabPane Key="2" Tab="单词错误率分析">
+        <Table DataSource="@wordStats" TItem="WordStatViewModel" PageSize="50" ScrollY="600px" Context="stat">
+            <PropertyColumn Property="c=>c.Id" Title="序号" Width="80" Sortable />
+            <PropertyColumn Property="c=>c.English" Title="英文" Sortable Filterable />
+            <PropertyColumn Property="c=>c.Chinese" Title="中文" Filterable />
+            <PropertyColumn Property="c=>c.Attempts" Title="练习次数" Sortable DefaultSortOrder="@SortDirection.Descending" />
+            <PropertyColumn Property="c=>c.ErrorCount" Title="错误次数" Sortable />
+            <ActionColumn Title="错误率">
+                 <div style="width: 100px;">
+                    <AntDesign.Progress Percent="@stat.ErrorRate" Size="@ProgressSize.Small" Status="@(stat.ErrorRate > 50 ? ProgressStatus.Exception : ProgressStatus.Success)" />
+                </div>
+            </ActionColumn>
+        </Table>
+    </TabPane>
+</Tabs>
+
+<Modal Title="答卷预览"
+       Visible="@previewVisible"
+       OnCancel="@(() => previewVisible = false)"
+       Footer="null"
+       Width="1000"
+       Style="top: 20px;">
+    <div style="text-align: center;">
+        <img src="@previewImage" style="max-width: 100%; max-height: 80vh;" />
+    </div>
+</Modal>
+
+@code {
+    private System.Collections.Generic.List<WordStatViewModel> wordStats = new();
+    private bool previewVisible = false;
+    private string previewImage = "";
+
+    private void ShowPreview(string image)
+    {
+        Logger.LogInformation("ShowPreview called");
+        previewImage = image;
+        previewVisible = true;
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        wordStats.Clear();
+        foreach (var word in WordService.AllWords)
+        {
+            int attempts = 0;
+            int errors = 0;
+            
+            if (WordService.Stats.WordAttempts.ContainsKey(word.Id))
+                attempts = WordService.Stats.WordAttempts[word.Id];
+                
+            if (WordService.Stats.WordErrorCounts.ContainsKey(word.Id))
+                errors = WordService.Stats.WordErrorCounts[word.Id];
+            
+            if (attempts > 0)
+            {
+                wordStats.Add(new WordStatViewModel
+                {
+                    Id = word.Id,
+                    English = word.English,
+                    Chinese = word.Chinese,
+                    Attempts = attempts,
+                    ErrorCount = errors,
+                    ErrorRate = Math.Round((double)errors / attempts * 100, 1)
+                });
+            }
+        }
+    }
+
+    private string GetProgressColor(double accuracy)
+    {
+        if (accuracy >= 90) return "#52c41a";
+        if (accuracy >= 60) return "#1890ff";
+        return "#ff4d4f";
+    }
+
+    private System.Collections.Generic.List<Word> GetWrongWords(System.Collections.Generic.List<int> ids)
+    {
+        return WordService.AllWords.Where(w => ids.Contains(w.Id)).ToList();
+    }
+
+    private void DeleteRecord(Guid id)
+    {
+        WordService.DeleteTestResult(id);
+        
+        // Refresh word stats tab
+        // OnInitialized calls wordStats.Clear() now, so it's safe
+        OnInitialized();
+        
+        // Refresh the UI at the end to reflect all changes
+        StateHasChanged();
+        
+        Message.Success("记录已删除");
+    }
+
+    private void Recalculate()
+    {
+        WordService.RecalculateStats();
+        wordStats.Clear();
+        OnInitialized();
+        StateHasChanged();
+        Message.Success("数据校准完成");
+    }
+
+    public class WordStatViewModel
+    {
+        public int Id { get; set; }
+        public string English { get; set; } = "";
+        public string Chinese { get; set; } = "";
+        public int Attempts { get; set; }
+        public int ErrorCount { get; set; }
+        public double ErrorRate { get; set; }
+    }
+}

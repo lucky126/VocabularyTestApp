@@ -1,0 +1,221 @@
+@page "/session"
+@inject WordService WordService
+@inject NavigationManager Navigation
+@inject MessageService Message
+
+<PageTitle>测试进行中</PageTitle>
+
+<div style="max-width: 800px; margin: 0 auto; padding-top: 50px;">
+    @if (isPreview)
+    {
+        <Card Title="测试内容预览" Style="margin-bottom: 20px;">
+            <Extra>
+                <Button Type="@ButtonType.Default" OnClick="@(() => Navigation.NavigateTo("/"))">放弃测试</Button>
+            </Extra>
+            <Body>
+                <Table DataSource="@testWords" TItem="Word" PaginationPosition="bottomCenter" PageSize="50">
+                    <PropertyColumn Property="c=>c.Id" Title="序号" Width="80" />
+                    <PropertyColumn Property="c=>c.English" Title="英文" />
+                    <PropertyColumn Property="c=>c.PartOfSpeech" Title="词性" Width="80" />
+                    <PropertyColumn Property="c=>c.Chinese" Title="中文" />
+                </Table>
+                <div style="margin-top: 20px; text-align: center;">
+                    <Button Type="@ButtonType.Primary" Size="@ButtonSize.Large" OnClick="StartActualTest" Block>确认并开始测试</Button>
+                </div>
+            </Body>
+        </Card>
+    }
+    else if (currentWord == null && !isFinished)
+    {
+         <div style="text-align: center;">
+            <Spin Size="@SpinSize.Large" Tip="加载中..." />
+        </div>
+    }
+    else if (isFinished)
+    {
+        <Result Status="AntDesign.ResultStatus.Success" Title="测试完成" SubTitle="@($"得分: {score} / {totalQuestions}")">
+                <Extra>
+                <Button Type="@ButtonType.Primary" OnClick="@(() => Navigation.NavigateTo("/config"))">再测一次</Button>
+                <Button OnClick="@(() => Navigation.NavigateTo("/"))">返回仪表盘</Button>
+            </Extra>
+                <ChildContent>
+                @if (wrongWords.Any())
+                {
+                    <Divider>错词列表</Divider>
+                    <AntList DataSource="@wrongWords" TItem="Word" Bordered>
+                        <ListItem>
+                            <ListItemMeta Title="@context.English" Description="@context.Chinese" />
+                            <div>序号: @context.Id</div>
+                        </ListItem>
+                    </AntList>
+                }
+            </ChildContent>
+        </Result>
+    }
+    else if (currentWord != null)
+    {
+        <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <Title Level="2">单词测试</Title>
+            <Button Type="@ButtonType.Default" OnClick="@(() => Navigation.NavigateTo("/"))">放弃测试</Button>
+        </div>
+
+        <Card Title="@($"题目 {currentIndex + 1} / {totalQuestions} - 单词序号: {currentWord.Id}")">
+            <Body>
+                <div style="font-size: 32px; margin-bottom: 40px; text-align: center; font-weight: bold;">
+                    @if (Mode == "EnToCn")
+                    {
+                        <div>@currentWord.English</div>
+                        <div style="font-size: 18px; color: #888; font-weight: normal; margin-top: 10px;">
+                            @currentWord.PartOfSpeech
+                        </div>
+                    }
+                    else
+                    {
+                        <div>@currentWord.Chinese</div>
+                    }
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                        <AntDesign.Input @bind-Value="userAnswer" Placeholder="在此输入答案..." OnPressEnter="SubmitAnswer" Size="@InputSize.Large" AutoFocus />
+                </div>
+
+                <Button Type="@ButtonType.Primary" OnClick="SubmitAnswer" Block Size="@ButtonSize.Large">提交</Button>
+                <Button Type="@ButtonType.Default" OnClick="SkipQuestion" Block Style="margin-top: 10px;">我不知道</Button>
+            </Body>
+        </Card>
+    }
+</div>
+
+@code {
+    [Parameter] [SupplyParameterFromQuery] public string? Mode { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public string? Method { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int Start { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int End { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public int Count { get; set; }
+
+    private List<Word> testWords = new();
+    private int currentIndex = 0;
+    private Word? currentWord;
+    private string userAnswer = "";
+    private int score = 0;
+    private bool isFinished = false;
+    private int totalQuestions = 0;
+    private List<Word> wrongWords = new();
+    private bool isPreview = true;
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrEmpty(Mode)) Mode = "EnToCn";
+        
+        if (Method == "Random")
+        {
+            testWords = WordService.GetRandomWords(Count, Start > 0 ? Start : null, End > 0 ? End : null);
+        }
+        else
+        {
+            testWords = WordService.GetWordsByRange(Start, End);
+        }
+
+        totalQuestions = testWords.Count;
+        // Don't set currentWord here, wait for StartActualTest
+    }
+
+    private void StartActualTest()
+    {
+        isPreview = false;
+        if (totalQuestions > 0)
+        {
+            currentWord = testWords[0];
+        }
+        else
+        {
+            isFinished = true;
+        }
+    }
+
+    private void SubmitAnswer()
+    {
+        if (string.IsNullOrWhiteSpace(userAnswer)) return;
+        if (currentWord == null) return;
+
+        bool isCorrect = CheckAnswer(userAnswer, currentWord);
+        if (isCorrect)
+        {
+            score++;
+            Message.Success("回答正确！");
+        }
+        else
+        {
+            wrongWords.Add(currentWord);
+            Message.Error($"回答错误！答案是: {(Mode == "EnToCn" ? currentWord.Chinese : currentWord.English)}");
+        }
+
+        NextQuestion();
+    }
+    
+    private void SkipQuestion()
+    {
+        if (currentWord == null) return;
+        wrongWords.Add(currentWord);
+        Message.Warning($"已跳过！答案是: {(Mode == "EnToCn" ? currentWord.Chinese : currentWord.English)}");
+        NextQuestion();
+    }
+
+    private void NextQuestion()
+    {
+        currentIndex++;
+        userAnswer = "";
+
+        if (currentIndex < totalQuestions)
+        {
+            currentWord = testWords[currentIndex];
+        }
+        else
+        {
+            FinishTest();
+        }
+    }
+
+    private void FinishTest()
+    {
+        currentWord = null;
+        isFinished = true;
+        
+        var result = new TestResult
+        {
+            Date = DateTime.Now,
+            TotalQuestions = totalQuestions,
+            CorrectCount = score,
+            WrongWordIds = wrongWords.Select(w => w.Id).ToList(),
+            TestedWordIds = testWords.Select(w => w.Id).ToList(),
+            Mode = Mode ?? "EnToCn",
+            GradingMode = "Interactive"
+        };
+        
+        WordService.RecordTestResult(result);
+        WordService.UpdateWordStats(testWords.Select(w => w.Id).ToList(), wrongWords.Select(w => w.Id).ToList());
+    }
+
+    private bool CheckAnswer(string answer, Word word)
+    {
+        // Simple string comparison
+        var target = Mode == "EnToCn" ? word.Chinese : word.English;
+        
+        // Split by comma/spaces to allow partial matches if needed, but for now exact match or containment
+        // The user requirement says "According to Chinese write English or English write Chinese".
+        // Usually English spelling needs to be exact. Chinese might be flexible.
+        
+        // Normalize
+        var a = answer.Trim().ToLower();
+        var t = target.Trim().ToLower();
+
+        if (a == t) return true;
+        
+        // Allow for "textbook, text book" variations? 
+        // For now, strict match or contained in synonyms (separated by comma)
+        var synonyms = t.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim());
+        if (synonyms.Contains(a)) return true;
+
+        return false;
+    }
+}

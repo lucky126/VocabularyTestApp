@@ -1,0 +1,97 @@
+@page "/config"
+@inject NavigationManager Navigation
+@inject WordService WordService
+
+<PageTitle>测试配置</PageTitle>
+
+<Row Type="flex" Justify="RowJustify.Center">
+    <Col Span="12">
+        <Card Title="配置测试">
+            <Extra>
+                <Button Type="@ButtonType.Link" OnClick="@(() => Navigation.NavigateTo("/"))">返回首页</Button>
+            </Extra>
+            <Body>
+                <Form Model="@config" Layout="FormLayout.Vertical">
+                    <FormItem Label="测试形式">
+                         <RadioGroup @bind-Value="config.Style">
+                            <Radio Value="@("Interactive")">交互式 (逐个回答)</Radio>
+                            <Radio Value="@("Paper")">试卷模式 (拍照上传)</Radio>
+                         </RadioGroup>
+                    </FormItem>
+
+                    <FormItem Label="模式">
+                         <RadioGroup @bind-Value="config.Mode">
+                            <Radio Value="@("EnToCn")">英译中</Radio>
+                            <Radio Value="@("CnToEn")">中译英</Radio>
+                         </RadioGroup>
+                    </FormItem>
+
+                    <FormItem Label="选择方式">
+                         <RadioGroup @bind-Value="config.Method">
+                            <Radio Value="@("Range")">按顺序范围</Radio>
+                            <Radio Value="@("Random")">随机抽取</Radio>
+                         </RadioGroup>
+                    </FormItem>
+
+                    @if (config.Method == "Range")
+                    {
+                        <FormItem Label="序号范围">
+                            <AntDesign.InputNumber TValue="int" @bind-Value="config.StartId" Min="1" Max="@WordService.AllWords.Count" />
+                            <span style="margin: 0 8px;">-</span>
+                            <AntDesign.InputNumber TValue="int" @bind-Value="config.EndId" Min="1" Max="@WordService.AllWords.Count" />
+                        </FormItem>
+                    }
+                    else
+                    {
+                         <FormItem Label="单词数量">
+                            <AntDesign.InputNumber TValue="int" @bind-Value="config.Count" Min="5" Max="@WordService.AllWords.Count" />
+                        </FormItem>
+                         <FormItem Label="在范围内抽取 (可选)">
+                            <AntDesign.InputNumber TValue="int" @bind-Value="config.StartId" Min="1" Max="@WordService.AllWords.Count" />
+                            <span style="margin: 0 8px;">-</span>
+                            <AntDesign.InputNumber TValue="int" @bind-Value="config.EndId" Min="1" Max="@WordService.AllWords.Count" />
+                        </FormItem>
+                    }
+
+                    <FormItem>
+                        <Button Type="@ButtonType.Primary" OnClick="StartTest" Block>开始测试</Button>
+                    </FormItem>
+                </Form>
+            </Body>
+        </Card>
+    </Col>
+</Row>
+
+@code {
+    private ConfigModel config = new();
+
+    protected override void OnInitialized()
+    {
+        config.EndId = WordService.AllWords.Count > 0 ? WordService.AllWords.Max(w => w.Id) : 50;
+    }
+
+    private void StartTest()
+    {
+        // Build query string
+        var url = "";
+        if (config.Style == "Paper")
+        {
+            url = $"/paper-test?mode={config.Mode}&method={config.Method}&start={config.StartId}&end={config.EndId}&count={config.Count}";
+        }
+        else
+        {
+            url = $"/session?mode={config.Mode}&method={config.Method}&start={config.StartId}&end={config.EndId}&count={config.Count}";
+        }
+        Navigation.NavigateTo(url);
+    }
+
+    class ConfigModel
+    {
+        public string Style { get; set; } = "Interactive";
+        public string Mode { get; set; } = "EnToCn";
+        public string Method { get; set; } = "Range";
+        public int StartId { get; set; } = 1;
+        public int EndId { get; set; } = 50;
+        public int Count { get; set; } = 10;
+    }
+}

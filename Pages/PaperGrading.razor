@@ -1,0 +1,429 @@
+@page "/paper-grading"
+@inject WordService WordService
+@inject NavigationManager Navigation
+@inject MessageService Message
+@using Microsoft.AspNetCore.Components.Forms
+@using VocabularyTestApp.Data
+
+@inject CozeGradingService CozeService
+@inject ILogger<PaperGrading> Logger
+
+<PageTitle>试卷核对</PageTitle>
+
+<div class="container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <Button Type="@ButtonType.Default" Icon="arrow-left" OnClick="@(() => Navigation.NavigateTo("/"))">放弃并返回</Button>
+        <div style="display: flex; align-items: center;">
+            <span style="margin-right: 8px;">评阅模式:</span>
+            <RadioGroup @bind-Value="gradingMode">
+                <Radio Value="@("Auto")">自动评阅</Radio>
+                <Radio Value="@("Manual")">人工评阅</Radio>
+            </RadioGroup>
+        </div>
+    </div>
+
+        <Row Gutter="24">
+            <!-- Left Column: Image Upload & Preview -->
+            <Col Span="10">
+                <Card Title="上传答题纸">
+                    <div style="text-align: center; min-height: 400px; background: #fafafa; border: 2px dashed #d9d9d9; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; position: relative;">
+                        @if (isRecognizing)
+                        {
+                            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 10; display: flex; justify-content: center; align-items: center;">
+                                <Spin Size="@SpinSize.Large" Tip="正在处理..." />
+                            </div>
+                        }
+
+                        <div style="@(string.IsNullOrEmpty(imageDataUrl) ? "" : "display: none;")">
+                            <div style="margin-bottom: 20px;">
+                                <InputFile OnChange="HandleFileSelected" accept="image/*" class="form-control" />
+                            </div>
+                            <div style="color: #999;">
+                                <Icon Type="camera" Style="font-size: 48px;" />
+                                <p>点击上方选择文件或拍照</p>
+                            </div>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(imageDataUrl))
+                        {
+                            <img src="@imageDataUrl" style="max-width: 100%; max-height: 600px; object-fit: contain;" />
+                            <Button Danger Type="@ButtonType.Link" OnClick="ClearImage" Style="margin-top: 10px;">重新上传</Button>
+                        }
+                    </div>
+                </Card>
+            </Col>
+
+            <Col Span="14">
+                <Card Title="@(gradingMode == "Manual" ? "答案核对" : "自动评阅进度")">
+                    <Extra>
+                        @if (gradingMode == "Manual")
+                        {
+                            <div style="color: #666;">
+                                请对照左侧图片，勾选<span style="color: #ff4d4f; font-weight: bold;">错误</span>的题目
+                            </div>
+                        }
+                    </Extra>
+                    <Body>
+                        @if (gradingMode == "Manual")
+                        {
+                            @if (!string.IsNullOrEmpty(imageDataUrl))
+                            {
+                                <div style="height: 500px; overflow-y: auto; padding-right: 10px;">
+                                    <AntList DataSource="@testWords" TItem="WordViewModel" Bordered>
+                                        <ListItem>
+                                            <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                                <div style="flex: 1;">
+                                                    <span style="font-weight: bold; margin-right: 8px;">@context.Id.</span>
+                                                    @if (Mode == "EnToCn")
+                                                    {
+                                                        <span style="font-size: 16px;">@context.English</span>
+                                                        <div style="color: #888; margin-left: 24px;">@context.Chinese</div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span style="font-size: 16px;">@context.Chinese</span>
+                                                        <div style="color: #888; margin-left: 24px;">@context.English</div>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <Checkbox @bind-Checked="context.IsWrong" Style="color: #ff4d4f;">错误</Checkbox>
+                                                </div>
+                                            </div>
+                                        </ListItem>
+                                    </AntList>
+                                </div>
+
+                                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f0f0f0;">
+                                    <div style="margin-bottom: 15px; font-size: 16px;">
+                                        当前得分: <span style="font-weight: bold; color: #1890ff; font-size: 20px;">@CalculateScore()</span> / @testWords.Count
+                                    </div>
+                                    <Button Type="@ButtonType.Primary" Size="@ButtonSize.Large" Block OnClick="SubmitResult" Loading="@isSubmitting">
+                                        提交成绩
+                                    </Button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="text-align: center; color: #999; padding-top: 40px;">
+                                    请先上传答题纸以开始人工核对
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="min-height: 200px;">
+                                @if (isRecognizing)
+                                {
+                                    <Alert Message="正在AI识别中..." Type="@AlertType.Info" ShowIcon="true" />
+                                }
+                                else if (!string.IsNullOrEmpty(statusText))
+                                {
+                                    <Alert Message="@statusText" Type="@AlertType.Success" ShowIcon="true" />
+                                    
+                                    @if (matchedCount > 0)
+                                    {
+                                         <div style="margin-top: 16px; font-size: 16px;">
+                                            <div>已匹配题目数: <span style="font-weight: bold;">@matchedCount</span></div>
+                                            <div>当前得分: <span style="font-weight: bold; color: #1890ff; font-size: 20px;">@CalculateScore()</span> / @testWords.Count</div>
+                                        </div>
+
+                                        <div style="margin-top: 16px; height: 400px; overflow-y: auto;">
+                                            <Table DataSource="@gradingDetails" TItem="GradingDetail" Size="@TableSize.Small" PaginationPosition="bottomCenter">
+                                                <PropertyColumn Property="c=>c.Id" Title="#" Width="50" />
+                                                <PropertyColumn Property="c=>c.Question" Title="题目" />
+                                                <PropertyColumn Property="c=>c.Recognized" Title="识别结果" />
+                                                <PropertyColumn Property="c=>c.CorrectAnswer" Title="正确答案" />
+                                                <PropertyColumn Property="c=>c.IsCorrect" Title="判定">
+                                                    @if (context.IsCorrect)
+                                                    {
+                                                        <Icon Type="check-circle" Theme="@IconThemeType.Fill" TwoToneColor="#52c41a" Style="color: #52c41a; font-size: 20px;" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <Icon Type="close-circle" Theme="@IconThemeType.Fill" TwoToneColor="#ff4d4f" Style="color: #ff4d4f; font-size: 20px;" />
+                                                    }
+                                                </PropertyColumn>
+                                            </Table>
+                                        </div>
+                                        
+                                        <div style="margin-top: 20px;">
+                                             <Button Type="@ButtonType.Primary" Size="@ButtonSize.Large" Block OnClick="SubmitResult" Loading="@isSubmitting">
+                                                保存自动评阅成绩
+                                            </Button>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div style="text-align: center; color: #999; padding-top: 40px;">
+                                        请上传答题纸以开始自动评阅
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </Body>
+                </Card>
+            </Col>
+        </Row>
+    </div>
+
+@code {
+    [Parameter] [SupplyParameterFromQuery] public string? Mode { get; set; }
+    [Parameter] [SupplyParameterFromQuery] public string? Ids { get; set; }
+
+    private List<WordViewModel> testWords = new();
+    private List<GradingDetail> gradingDetails = new();
+    private string? imageDataUrl;
+    private bool isSubmitting = false;
+    private string gradingMode = "Auto";
+    private bool isRecognizing = false;
+    private int matchedCount = 0;
+    private string statusText = "";
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(Ids))
+        {
+            try
+            {
+                var idList = Ids.Split(',').Select(int.Parse).ToList();
+                // Preserve order
+                var words = WordService.AllWords.Where(w => idList.Contains(w.Id)).ToList();
+                foreach (var id in idList)
+                {
+                    var w = words.FirstOrDefault(x => x.Id == id);
+                    if (w != null)
+                    {
+                        testWords.Add(new WordViewModel(w));
+                    }
+                }
+            }
+            catch
+            {
+                // Handle error
+            }
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        Logger.LogInformation("HandleFileSelected triggered");
+        var file = e.File;
+        if (file != null)
+        {
+            Logger.LogInformation($"File selected: {file.Name}, Size: {file.Size}, Type: {file.ContentType}");
+            
+            try
+            {
+                var format = "image/jpeg";
+                var maxFileSize = 10 * 1024 * 1024; // 10MB
+                
+                Logger.LogInformation("Requesting image file...");
+                // RequestImageFileAsync can be tricky with large files or if the component is disposed
+                var resizedImageFile = await file.RequestImageFileAsync(format, 800, 800);
+                Logger.LogInformation("Image file requested successfully");
+                
+                using var stream = resizedImageFile.OpenReadStream(maxAllowedSize: maxFileSize);
+                using var ms = new MemoryStream();
+                
+                Logger.LogInformation("Reading stream...");
+                await stream.CopyToAsync(ms);
+                Logger.LogInformation($"Stream read complete. Length: {ms.Length}");
+                
+                var buffer = ms.ToArray();
+                var base64 = Convert.ToBase64String(buffer);
+                Logger.LogInformation("Base64 conversion complete");
+                
+                // Now it's safe to update UI
+                imageDataUrl = $"data:{format};base64,{base64}";
+                statusText = "图片已选择";
+                isRecognizing = true;
+                StateHasChanged(); // Update to show image and spinner
+                Logger.LogInformation("UI updated with image");
+                
+                if (gradingMode == "Auto")
+                {
+                    Logger.LogInformation("Starting AutoGradeAsync");
+                    await AutoGradeAsync(base64);
+                }
+                else
+                {
+                    Message.Success("图片上传成功，请对照右侧答案进行核对");
+                    isRecognizing = false; // Re-enable if manual
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Image processing failed in HandleFileSelected");
+                Message.Error($"图片处理失败: {ex.Message}");
+                statusText = "图片处理失败";
+                isRecognizing = false;
+                StateHasChanged();
+            }
+        }
+        else
+        {
+             Logger.LogWarning("File is null in HandleFileSelected");
+        }
+    }
+
+    private async Task AutoGradeAsync(string base64Image)
+    {
+        isRecognizing = true;
+        gradingDetails.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var results = await CozeService.RecognizePaperAsync(base64Image);
+            if (results == null || !results.Any())
+            {
+                Message.Warning("未能识别出有效内容，请切换到人工评阅模式或重新拍摄。");
+                statusText = "识别失败";
+            }
+            else
+            {
+                matchedCount = 0;
+                foreach (var res in results)
+                {
+                    // Match by ID (序号)
+                    var wordVm = testWords.FirstOrDefault(w => w.Id == res.序号);
+                    if (wordVm != null)
+                    {
+                        matchedCount++;
+                        // Check correctness
+                        // Note: The prompt says "序号的文本要和题目的序号对应的内容一致，即判定做答正确"
+                        // We compare recognized text with the correct answer.
+                        // EnToCn mode: User writes Chinese. Compare res.文本 with wordVm.Chinese.
+                        // CnToEn mode: User writes English. Compare res.文本 with wordVm.English.
+                        
+                        string correctAnswer = Mode == "EnToCn" ? wordVm.Chinese : wordVm.English;
+                        string question = Mode == "EnToCn" ? wordVm.English : wordVm.Chinese;
+                        bool isCorrect = IsAnswerCorrect(res.文本, correctAnswer);
+                        
+                        wordVm.IsWrong = !isCorrect;
+                        
+                        gradingDetails.Add(new GradingDetail
+                        {
+                            Id = wordVm.Id,
+                            Question = question,
+                            CorrectAnswer = correctAnswer,
+                            Recognized = res.文本,
+                            IsCorrect = isCorrect
+                        });
+                    }
+                }
+                
+                if (matchedCount > 0)
+                {
+                    statusText = $"自动评阅完成，已匹配 {matchedCount} 个题目";
+                    Message.Success(statusText);
+                    // No longer auto-submit, let user review and click save
+                }
+                else
+                {
+                    Message.Warning("未能匹配到任何题目，请检查序号是否正确。");
+                    statusText = "未能匹配到题目";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Auto grading failed");
+            Message.Error($"自动评阅出错: {ex.Message}");
+            statusText = "自动评阅出错";
+        }
+        finally
+        {
+            isRecognizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsAnswerCorrect(string recognized, string correct)
+    {
+        if (string.IsNullOrWhiteSpace(recognized)) return false;
+        if (string.IsNullOrWhiteSpace(correct)) return false;
+
+        // Normalize
+        var r = recognized.Trim().ToLowerInvariant();
+        var c = correct.Trim().ToLowerInvariant();
+
+        // Simple exact match (case-insensitive)
+        // Can be improved with Levenshtein distance or more complex logic later
+        
+        // For Chinese, remove punctuation potentially
+        r = r.Replace("，", ",").Replace("。", "").Replace("；", ";");
+        c = c.Replace("，", ",").Replace("。", "").Replace("；", ";");
+        
+        return r == c;
+    }
+
+    private void ClearImage()
+    {
+        imageDataUrl = null;
+        statusText = "";
+        matchedCount = 0;
+    }
+
+    private int CalculateScore()
+    {
+        return testWords.Count(w => !w.IsWrong);
+    }
+
+    private void SubmitResult()
+    {
+        if (gradingMode == "Manual" && string.IsNullOrEmpty(imageDataUrl))
+        {
+             Message.Error("请先上传答题纸照片");
+             return;
+        }
+
+        isSubmitting = true;
+        
+        var wrongIds = testWords.Where(w => w.IsWrong).Select(w => w.Id).ToList();
+        var testedIds = testWords.Select(w => w.Id).ToList();
+        
+        var result = new TestResult
+        {
+            Date = DateTime.Now,
+            TotalQuestions = testWords.Count,
+            CorrectCount = testWords.Count - wrongIds.Count,
+            WrongWordIds = wrongIds,
+            TestedWordIds = testedIds,
+            Mode = Mode ?? "EnToCn",
+            GradingMode = gradingMode,
+            PaperImageBase64 = imageDataUrl
+        };
+        
+        WordService.RecordTestResult(result);
+        WordService.UpdateWordStats(testedIds, wrongIds);
+        
+        isSubmitting = false;
+        Message.Success("成绩已保存");
+        Navigation.NavigateTo("/stats");
+    }
+
+    public class WordViewModel : Word
+    {
+        public bool IsWrong { get; set; }
+
+        public WordViewModel(Word w)
+        {
+            Id = w.Id;
+            English = w.English;
+            Chinese = w.Chinese;
+            PartOfSpeech = w.PartOfSpeech;
+        }
+    }
+
+    public class GradingDetail
+    {
+        public int Id { get; set; }
+        public string? Question { get; set; }
+        public string? CorrectAnswer { get; set; }
+        public string? Recognized { get; set; }
+        public bool IsCorrect { get; set; }
+    }
+}
