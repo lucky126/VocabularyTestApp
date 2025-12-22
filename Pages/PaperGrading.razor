@@ -11,20 +11,24 @@
 <PageTitle>试卷核对</PageTitle>
 
 <div class="container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
-    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-        <Button Type="@ButtonType.Default" Icon="arrow-left" OnClick="@(() => Navigation.NavigateTo("/"))">放弃并返回</Button>
-        <div style="display: flex; align-items: center;">
-            <span style="margin-right: 8px;">评阅模式:</span>
-            <RadioGroup @bind-Value="gradingMode">
-                <Radio Value="@("Auto")">自动评阅</Radio>
-                <Radio Value="@("Manual")">人工评阅</Radio>
-            </RadioGroup>
-        </div>
+    <div style="margin-bottom: 20px;">
+        <Row Type="flex" Justify="RowJustify.SpaceBetween" Align="RowAlign.Middle" Gutter="16">
+            <Col Xs="24" Sm="8" Style="margin-bottom: 10px;">
+                <Button Type="@ButtonType.Default" Icon="arrow-left" OnClick="@(() => Navigation.NavigateTo("/"))" Block>放弃并返回</Button>
+            </Col>
+            <Col Xs="24" Sm="16" Style="display: flex; justify-content: flex-end; align-items: center;">
+                <span style="margin-right: 8px; white-space: nowrap;">评阅模式:</span>
+                <RadioGroup @bind-Value="gradingMode">
+                    <Radio Value="@("Auto")">自动评阅</Radio>
+                    <Radio Value="@("Manual")">人工评阅</Radio>
+                </RadioGroup>
+            </Col>
+        </Row>
     </div>
 
         <Row Gutter="24">
             <!-- Left Column: Image Upload & Preview -->
-            <Col Span="10">
+            <Col Xs="24" Lg="10" Style="margin-bottom: 20px;">
                 <Card Title="上传答题纸">
                     <div style="text-align: center; min-height: 400px; background: #fafafa; border: 2px dashed #d9d9d9; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; position: relative;">
                         @if (isRecognizing)
@@ -53,7 +57,7 @@
                 </Card>
             </Col>
 
-            <Col Span="14">
+            <Col Xs="24" Lg="14">
                 <Card Title="@(gradingMode == "Manual" ? "答案核对" : "自动评阅进度")">
                     <Extra>
                         @if (gradingMode == "Manual")
@@ -128,12 +132,12 @@
                                         </div>
 
                                         <div style="margin-top: 16px; height: 400px; overflow-y: auto;">
-                                            <Table DataSource="@gradingDetails" TItem="GradingDetail" Size="@TableSize.Small" PaginationPosition="bottomCenter">
-                                                <PropertyColumn Property="c=>c.Id" Title="#" Width="50" />
-                                                <PropertyColumn Property="c=>c.Question" Title="题目" />
-                                                <PropertyColumn Property="c=>c.Recognized" Title="识别结果" />
-                                                <PropertyColumn Property="c=>c.CorrectAnswer" Title="正确答案" />
-                                                <PropertyColumn Property="c=>c.IsCorrect" Title="判定">
+                                            <Table DataSource="@gradingDetails" TItem="GradingDetail" Size="@TableSize.Small" PaginationPosition="bottomCenter" ScrollX="600px">
+                                                <PropertyColumn Property="c=>c.Id" Title="#" Width="50" Fixed="ColumnFixPlacement.Left" />
+                                                <PropertyColumn Property="c=>c.Question" Title="题目" Width="100" />
+                                                <PropertyColumn Property="c=>c.Recognized" Title="识别结果" Width="120" />
+                                                <PropertyColumn Property="c=>c.CorrectAnswer" Title="正确答案" Width="120" />
+                                                <PropertyColumn Property="c=>c.IsCorrect" Title="判定" Width="60" Fixed="ColumnFixPlacement.Right">
                                                     @if (context.IsCorrect)
                                                     {
                                                         <Icon Type="check-circle" Theme="@IconThemeType.Fill" TwoToneColor="#52c41a" Style="color: #52c41a; font-size: 20px;" />
