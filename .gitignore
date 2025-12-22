@@ -329,3 +329,6 @@ _Pvt_Extensions
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Secrets
+appsettings.Secret.json

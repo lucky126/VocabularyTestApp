@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Web;
 using VocabularyTestApp.Data;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Secret.json", optional: true, reloadOnChange: true);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
