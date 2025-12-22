@@ -13,10 +13,10 @@
                 <Button Type="@ButtonType.Default" OnClick="@(() => Navigation.NavigateTo("/"))">放弃测试</Button>
             </Extra>
             <Body>
-                <Table DataSource="@testWords" TItem="Word" PaginationPosition="bottomCenter" PageSize="50">
-                    <PropertyColumn Property="c=>c.Id" Title="序号" Width="80" />
+                <Table DataSource="@testWords" TItem="Word" PaginationPosition="bottomCenter" PageSize="50" Size="@TableSize.Small">
+                    <PropertyColumn Property="c=>c.Id" Title="序号" Width="50" />
                     <PropertyColumn Property="c=>c.English" Title="英文" />
-                    <PropertyColumn Property="c=>c.PartOfSpeech" Title="词性" Width="80" />
+                    <PropertyColumn Property="c=>c.PartOfSpeech" Title="词性" Width="60" />
                     <PropertyColumn Property="c=>c.Chinese" Title="中文" />
                 </Table>
                 <div style="margin-top: 20px; text-align: center;">

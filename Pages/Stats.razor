@@ -25,9 +25,9 @@
 
 <Tabs DefaultActiveKey="1">
     <TabPane Key="1" Tab="历史测试记录">
-        <Table DataSource="@WordService.Stats.TestHistory.OrderByDescending(x => x.Date)" TItem="TestResult" Context="testResult">
-            <PropertyColumn Property="c=>c.Date" Format="yyyy-MM-dd HH:mm" Title="日期" Sortable />
-            <PropertyColumn Property="c=>c.Mode" Title="模式">
+        <Table DataSource="@WordService.Stats.TestHistory.OrderByDescending(x => x.Date)" TItem="TestResult" Context="testResult" ScrollX="1000px">
+            <PropertyColumn Property="c=>c.Date" Format="yyyy-MM-dd HH:mm" Title="日期" Sortable Width="150" />
+            <PropertyColumn Property="c=>c.Mode" Title="模式" Width="100">
                 @if (testResult.Mode == "EnToCn")
                 {
                     <Tag Color="@("blue")">英译中</Tag>
@@ -106,7 +106,7 @@
     </TabPane>
     
     <TabPane Key="2" Tab="单词错误率分析">
-        <Table DataSource="@wordStats" TItem="WordStatViewModel" PageSize="50" ScrollY="600px" Context="stat">
+        <Table DataSource="@wordStats" TItem="WordStatViewModel" PageSize="50" ScrollY="600px" ScrollX="600px" Context="stat">
             <PropertyColumn Property="c=>c.Id" Title="序号" Width="80" Sortable />
             <PropertyColumn Property="c=>c.English" Title="英文" Sortable Filterable />
             <PropertyColumn Property="c=>c.Chinese" Title="中文" Filterable />
