@@ -1,65 +1,65 @@
-# Vocabulary Test App
+# Vocabulary Test App (词汇测试应用)
 
-A Blazor Server application for vocabulary testing and grading, featuring AI-powered handwriting recognition via Coze workflow integration.
+这是一个基于 Blazor Server 的词汇测试与评分应用，集成了 Coze 工作流以实现 AI 驱动的手写识别功能。
 
-## Features
+## 功能特性
 
-*   **Vocabulary Testing**: Interactive testing for English-to-Chinese and Chinese-to-English translation.
-*   **Auto Grading**: Upload photos of your handwritten answer sheet for automatic grading using AI (Coze Workflow).
-*   **Manual Grading**: Fallback mode for manual verification and grading.
-*   **Statistics**: Track your progress with detailed history and accuracy charts.
-*   **Review**: View past test papers and recognition results.
+*   **词汇测试**：支持英译中和中译英的交互式测试。
+*   **自动评分**：上传手写答题纸照片，利用 AI（Coze 工作流）自动进行评分。
+*   **人工评分**：提供手动核对和评分的备用模式。
+*   **统计分析**：通过详细的历史记录和正确率图表追踪学习进度。
+*   **回顾复习**：查看过往的试卷和识别结果。
 
-## Prerequisites
+## 环境要求
 
 *   .NET 7.0 SDK
-*   A Coze API Token and Workflow ID (for auto-grading features)
+*   Coze API Token 和 Workflow ID（用于自动评分功能）
 
-## Setup
+## 安装与设置
 
-1.  **Clone the repository**
+1.  **克隆仓库**
     ```bash
     git clone https://github.com/lucky126/VocabularyTestApp.git
     cd VocabularyTestApp
     ```
 
-2.  **Configuration**
-    The application requires Coze API credentials to function correctly. These secrets should not be committed to version control.
+2.  **配置**
+    应用需要 Coze API 凭证才能正常工作。这些敏感信息不应提交到版本控制中。
 
-    Create a file named `appsettings.Secret.json` in the root of the project (next to `appsettings.json`) with the following content:
+    在项目根目录（`appsettings.json` 旁边）创建一个名为 `appsettings.Secret.json` 的文件，内容如下：
 
     ```json
     {
       "Coze": {
-        "ApiToken": "YOUR_ACTUAL_API_TOKEN",
-        "WorkflowId": "YOUR_ACTUAL_WORKFLOW_ID"
+        "ApiToken": "你的_真实_API_TOKEN",
+        "WorkflowId": "你的_真实_WORKFLOW_ID"
       }
     }
     ```
 
-    *Note: `appsettings.Secret.json` is configured to be ignored by Git.*
+    *注意：`appsettings.Secret.json` 已配置为被 Git 忽略。*
 
-3.  **Run the application**
+3.  **运行应用**
     ```bash
     dotnet run
     ```
-    Or using hot reload:
+    或者使用热重载模式：
     ```bash
     dotnet watch run
     ```
 
-4.  **Access the app**
-    Open your browser and navigate to `https://localhost:7196` (or the URL displayed in the console).
+4.  **访问应用**
+    打开浏览器并访问 `https://localhost:7196`（或控制台中显示的 URL）。
 
-## Usage
+## 使用说明
 
-1.  **Config Test**: Choose the number of words and the test mode (En->Cn or Cn->En).
-2.  **Take Test**: Write down your answers on a piece of paper numbered 1 to N.
-3.  **Grading**:
-    *   **Auto**: Click the camera icon to upload a photo of your answer sheet. The AI will recognize the text and grade it against the correct answers.
-    *   **Manual**: Manually mark answers as correct or incorrect.
-4.  **Stats**: View your historical performance and review past test papers.
+1.  **配置测试**：选择单词数量和测试模式（英->中 或 中->英）。
+2.  **进行测试**：在纸上写下你的答案，并在题号前标注 1 到 N。
+3.  **评分**：
+    *   **自动**：点击相机图标上传答题纸照片。AI 将识别文本并与正确答案比对进行评分。
+    *   **人工**：手动标记答案正确与否。
+4.  **统计**：查看历史成绩并回顾过往试卷。
 
-## License
+## 许可证
 
 [MIT](LICENSE)
