@@ -1,0 +1,65 @@
+@page "/admin/login"
+@inject AdminAuthService AdminAuth
+@inject NavigationManager Navigation
+@inject MessageService Message
+@inject ILogger<AdminLogin> Logger
+
+<Alert Type="@AlertType.Warning" ShowIcon="true" Message="提示" Description="@hintText" Style="max-width: 520px; margin: 16px auto;" />
+
+<Card Title="管理员登录" Style="max-width: 420px; margin: 40px auto;">
+    <Form Model="@loginModel" OnFinish="@HandleLogin" Layout="@FormLayout.Vertical">
+        <FormItem Label="用户名">
+            <Input @bind-Value="loginModel.Username" />
+        </FormItem>
+        <FormItem Label="密码">
+            <InputText @bind-Value="loginModel.Password" Type="password" class="ant-input" />
+        </FormItem>
+        <FormItem>
+            <Button Type="@ButtonType.Primary" HtmlType="submit">登录</Button>
+        </FormItem>
+    </Form>
+</Card>
+
+@code {
+    private LoginModel loginModel = new();
+    private string hintText = "";
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            Logger?.LogInformation("AdminLogin page initialized. PasswordConfigured={Configured}", AdminAuth.IsPasswordConfigured());
+            hintText = AdminAuth.IsPasswordConfigured()
+                ? "已检测到自定义管理员密码配置。请使用配置文件中的用户名与密码登录。"
+                : "尚未配置管理员密码，当前为默认账号：admin / CHANGE_ME。请在 appsettings.Secret.json 中设置 Admin:Username 与 Admin:Password。";
+        }
+        catch (Exception ex)
+        {
+            hintText = $"登录提示初始化失败：{ex.Message}";
+            Logger?.LogError(ex, "AdminLogin initialization failed");
+        }
+    }
+
+    private void HandleLogin()
+    {
+        var user = loginModel.Username ?? "";
+        Logger?.LogInformation("Login attempt by user '{User}'", user);
+        var ok = AdminAuth.Login(user, loginModel.Password ?? "");
+        if (ok)
+        {
+            Logger?.LogInformation("Login success for user '{User}'", user);
+            Navigation.NavigateTo("/admin/words");
+        }
+        else
+        {
+            Message.Error("用户名或密码错误");
+            Logger?.LogWarning("Login failed for user '{User}'", user);
+        }
+    }
+
+    public class LoginModel
+    {
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+    }
+}

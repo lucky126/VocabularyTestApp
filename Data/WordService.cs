@@ -36,6 +36,46 @@ namespace VocabularyTestApp.Data
             File.WriteAllText(_statsFilePath, json);
         }
 
+        public void SaveWords()
+        {
+            var json = JsonSerializer.Serialize(AllWords, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_wordsFilePath, json);
+        }
+
+        public void AddOrUpdateWord(Word w)
+        {
+            if (w == null) return;
+            if (w.Id <= 0) throw new ArgumentException("Word Id 必须为正整数");
+            var existing = AllWords.FirstOrDefault(x => x.Id == w.Id);
+            if (existing != null)
+            {
+                existing.English = w.English;
+                existing.PartOfSpeech = w.PartOfSpeech;
+                existing.Chinese = w.Chinese;
+            }
+            else
+            {
+                AllWords.Add(new Word
+                {
+                    Id = w.Id,
+                    English = w.English,
+                    PartOfSpeech = w.PartOfSpeech,
+                    Chinese = w.Chinese
+                });
+            }
+            SaveWords();
+        }
+
+        public void DeleteWordById(int id)
+        {
+            var idx = AllWords.FindIndex(x => x.Id == id);
+            if (idx >= 0)
+            {
+                AllWords.RemoveAt(idx);
+                SaveWords();
+            }
+        }
+
         public List<Word> GetWordsByRange(int startId, int endId)
         {
             return AllWords.Where(w => w.Id >= startId && w.Id <= endId).ToList();

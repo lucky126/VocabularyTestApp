@@ -1,0 +1,581 @@
+@page "/admin/words"
+@inject WordService WordService
+@inject AdminAuthService AdminAuth
+@inject NavigationManager Navigation
+@inject MessageService Message
+@inject ILogger<AdminWords> Logger
+
+@if (!AdminAuth.IsAuthenticated)
+{
+    <Result Title="未登录" SubTitle="请先登录管理员账号">
+        <Button Type="@ButtonType.Primary" OnClick="@(() => Navigation.NavigateTo("/admin/login"))">去登录</Button>
+    </Result>
+}
+else
+{
+    <div style="background:#fff;">
+        <div style="padding:16px 24px; border-bottom:1px solid #f0f0f0;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-size:18px; font-weight:600;">
+                    数量：@GetFilteredWords().Count()
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; width:380px;">
+                    <Input TValue="string" @bind-Value="searchText" Placeholder="搜索英语/中文/ID" Style="flex:1;" />
+                    <Button Type="@ButtonType.Default" OnClick="@ApplySearch"><Icon Type="search" /> 搜索</Button>
+                </div>
+            </div>
+        </div>
+
+        <div style="padding:16px 24px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                <Button Type="@ButtonType.Primary" OnClick="@ShowCreateModal"><Icon Type="plus" /> 新增</Button>
+                <Button Type="@ButtonType.Default" OnClick="@OpenImport"><Icon Type="upload" /> 批量新增</Button>
+                <Popconfirm Title="确定批量删除选中的词条？" OnConfirm="@DeleteSelected" Disabled="@(!selectedIds.Any())">
+                    <Button Danger Disabled="@(!selectedIds.Any())"><Icon Type="delete" /> 批量删除 (@selectedIds.Count)</Button>
+                </Popconfirm>
+                <div style="margin-left:auto;"></div>
+            </div>
+
+            <Table DataSource="@GetFilteredWords()" TItem="Word" Context="w" PageSize="@pageSize" PaginationPosition="bottomLeft" Size="@TableSize.Small" RowKey="@(x => x.Id)" Bordered>
+                <ActionColumn Title="" Width="60">
+                    <Checkbox Checked="@(selectedIds.Contains(w.Id))" OnChange="@(b => ToggleSelected(w.Id, b))" />
+                </ActionColumn>
+                <ActionColumn Title="ID" Width="100">
+                    @w.Id
+                </ActionColumn>
+                <ActionColumn Title="英语">
+                    @if (editingId == w.Id)
+                    {
+                        <Input TValue="string" @bind-Value="editWord.English" OnChange="@OnEnglishChanged" />
+                        @if (!string.IsNullOrEmpty(englishInlineError))
+                        {
+                            <div style="color:#ff4d4f; margin-top:4px;">@englishInlineError</div>
+                        }
+                    }
+                    else
+                    {
+                        @w.English
+                    }
+                </ActionColumn>
+                <ActionColumn Title="词性" Width="160">
+                    @if (editingId == w.Id)
+                    {
+                        <select @bind="editWord.PartOfSpeech" style="min-width:140px;" class="form-control">
+                            <option value="n.">名词 (n.)</option>
+                            <option value="v.">动词 (v.)</option>
+                            <option value="adj.">形容词 (adj.)</option>
+                            <option value="adv.">副词 (adv.)</option>
+                            <option value="prep.">介词 (prep.)</option>
+                            <option value="pron.">代词 (pron.)</option>
+                            <option value="num.">数词 (num.)</option>
+                            <option value="art.">冠词 (art.)</option>
+                            <option value="conj.">连词 (conj.)</option>
+                            <option value="int.">感叹词 (int.)</option>
+                        </select>
+                    }
+                    else
+                    {
+                        <Tag Color="@GetPosColor(w.PartOfSpeech)">@w.PartOfSpeech</Tag>
+                    }
+                </ActionColumn>
+                <ActionColumn Title="中文">
+                    @if (editingId == w.Id)
+                    {
+                        <Input TValue="string" @bind-Value="editWord.Chinese" OnChange="@OnChineseChanged" />
+                        @if (!string.IsNullOrEmpty(chineseInlineError))
+                        {
+                            <div style="color:#ff4d4f; margin-top:4px;">@chineseInlineError</div>
+                        }
+                    }
+                    else
+                    {
+                        @w.Chinese
+                    }
+                </ActionColumn>
+                <ActionColumn Title="Action" Width="220">
+                    @if (editingId == w.Id)
+                    {
+                        <div style="display:flex; align-items:center;">
+                            <Button Size="@ButtonSize.Small" Type="@ButtonType.Primary" Style="margin-right:8px;" OnClick="@(() => SaveRow())"><Icon Type="save" /> 保存</Button>
+                            <Button Size="@ButtonSize.Small" OnClick="@CancelEdit"><Icon Type="close" /> 取消</Button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="display:flex; align-items:center;">
+                            <Button Size="@ButtonSize.Small" Type="@ButtonType.Default" Style="margin-right:8px;" OnClick="@(() => StartEdit(w))"><Icon Type="edit" /> 编辑</Button>
+                            <Popconfirm Title="确定删除该词条？" OnConfirm="@(() => DeleteRow(w))">
+                                <Button Size="@ButtonSize.Small" Danger><Icon Type="delete" /> 删除</Button>
+                            </Popconfirm>
+                        </div>
+                    }
+                </ActionColumn>
+            </Table>
+        </div>
+    </div>
+
+    <Modal Title="@modalTitle" Visible="@modalVisible" OnOk="@SaveWord" OnCancel="@CloseModal" MaskClosable="false" Keyboard="false">
+        @if (idExistsError)
+        {
+            <Alert Type="@AlertType.Error" ShowIcon="true" Message="ID 已存在，不能重复" />
+        }
+        <Form Model="@editWord" Layout="@FormLayout.Vertical">
+            <FormItem Label="ID（不可重复）" Required>
+                <AntDesign.InputNumber TValue="int" @bind-Value="editWord.Id" OnChange="@OnIdNumberChanged" />
+            </FormItem>
+            <FormItem Label="英语" Required>
+                <Input TValue="string" @bind-Value="editWord.English" OnChange="@OnEnglishChanged" />
+                @if (!string.IsNullOrEmpty(englishErrorMsg))
+                {
+                    <div style="color:#ff4d4f; margin-top:4px;">@englishErrorMsg</div>
+                }
+            </FormItem>
+            <FormItem Label="词性">
+                <select @bind="editWord.PartOfSpeech" style="width:100%;" class="form-control">
+                    <option value="n.">名词 (n.)</option>
+                    <option value="v.">动词 (v.)</option>
+                    <option value="adj.">形容词 (adj.)</option>
+                    <option value="adv.">副词 (adv.)</option>
+                    <option value="prep.">介词 (prep.)</option>
+                    <option value="pron.">代词 (pron.)</option>
+                    <option value="num.">数词 (num.)</option>
+                    <option value="art.">冠词 (art.)</option>
+                    <option value="conj.">连词 (conj.)</option>
+                    <option value="int.">感叹词 (int.)</option>
+                </select>
+            </FormItem>
+            <FormItem Label="中文" Required>
+                <Input TValue="string" @bind-Value="editWord.Chinese" OnChange="@OnChineseChanged" />
+                @if (!string.IsNullOrEmpty(chineseErrorMsg))
+                {
+                    <div style="color:#ff4d4f; margin-top:4px;">@chineseErrorMsg</div>
+                }
+            </FormItem>
+        </Form>
+    </Modal>
+
+    <Modal Title="批量导入" Visible="@importVisible" OnCancel="@CloseImport" Footer="@null">
+        <Space Direction="@SpaceDirection.Vertical" Style="width: 100%;">
+            @if (importLoading)
+            {
+                <Spin Tip="导入中..." />
+            }
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div>
+                    <a href="templates/words-import-template.csv" download>下载模板（CSV）</a>
+                </div>
+                <div style="color:#999;">支持 .xlsx 或 .csv</div>
+            </div>
+            <InputFile OnChange="@HandleExcelInputFile" accept=".xlsx,.csv" />
+        </Space>
+    </Modal>
+}
+
+@code {
+    private HashSet<int> selectedIds = new();
+    private bool selectAll = false;
+    private bool modalVisible = false;
+    private string modalTitle = "新增单词";
+    private Word editWord = new();
+    private int? editingId;
+    private bool importVisible = false;
+    private bool importLoading = false;
+    private int pageSize = 20;
+    private string searchText = "";
+    private bool idExistsError = false;
+    private string englishErrorMsg = "";
+    private string chineseErrorMsg = "";
+    private string englishInlineError = "";
+    private string chineseInlineError = "";
+
+    protected override void OnInitialized()
+    {
+        Logger?.LogInformation("AdminWords initialized. IsAuthenticated={Auth}", AdminAuth.IsAuthenticated);
+    }
+
+    private void ShowCreateModal()
+    {
+        modalTitle = "新增单词";
+        editWord = new Word();
+        modalVisible = true;
+        idExistsError = false;
+        englishErrorMsg = "";
+        chineseErrorMsg = "";
+    }
+
+    private void EditWord(Word w)
+    {
+        modalTitle = "编辑单词";
+        editWord = new Word
+        {
+            Id = w.Id,
+            English = w.English,
+            PartOfSpeech = w.PartOfSpeech,
+            Chinese = w.Chinese
+        };
+        modalVisible = true;
+    }
+
+    private void StartEdit(Word w)
+    {
+        editingId = w.Id;
+        editWord = new Word
+        {
+            Id = w.Id,
+            English = w.English,
+            PartOfSpeech = w.PartOfSpeech,
+            Chinese = w.Chinese
+        };
+    }
+
+    private void SaveWord()
+    {
+        if (editWord.Id <= 0)
+        {
+            Message.Error("ID 必须为正整数；导入与测试均依赖此值");
+            return;
+        }
+        var exists = WordService.AllWords.Any(x => x.Id == editWord.Id);
+        if (exists)
+        {
+            idExistsError = true;
+            Message.Error("ID 已存在，不能重复");
+            return;
+        }
+        if (!IsEnglishText(editWord.English ?? ""))
+        {
+            englishErrorMsg = "英文只能包含英文、半角符号、数字";
+            Message.Error("英文只能输入英文、半角符号、数字");
+            return;
+        }
+        else
+        {
+            englishErrorMsg = "";
+        }
+        if (!IsChineseText(editWord.Chinese ?? ""))
+        {
+            chineseErrorMsg = "中文不能包含英文字母";
+            Message.Error("中文不能包含英文字母");
+            return;
+        }
+        else
+        {
+            chineseErrorMsg = "";
+        }
+        WordService.AddOrUpdateWord(editWord);
+        idExistsError = false;
+        modalVisible = false;
+        StateHasChanged();
+        Message.Success("已保存");
+    }
+
+    private void CloseModal()
+    {
+        modalVisible = false;
+    }
+    
+    private void OnIdNumberChanged(int value)
+    {
+        editWord.Id = value;
+        idExistsError = WordService.AllWords.Any(x => x.Id == value);
+    }
+
+    private void OnEnglishChanged(string value)
+    {
+        editWord.English = value ?? "";
+        englishErrorMsg = IsEnglishText(editWord.English) ? "" : "英文只能包含英文、半角符号、数字";
+    }
+
+    private void OnChineseChanged(string value)
+    {
+        editWord.Chinese = value ?? "";
+        chineseErrorMsg = IsChineseText(editWord.Chinese) ? "" : "中文不能包含英文字母";
+    }
+
+    private void SaveRow()
+    {
+        if (editWord.Id <= 0)
+        {
+            Message.Error("ID 必须为正整数");
+            return;
+        }
+        if (!IsEnglishText(editWord.English ?? ""))
+        {
+            englishInlineError = "英文只能包含英文、半角符号、数字";
+            Message.Error("英文只能输入英文、半角符号、数字");
+            return;
+        }
+        else
+        {
+            englishInlineError = "";
+        }
+        if (!IsChineseText(editWord.Chinese ?? ""))
+        {
+            chineseInlineError = "中文不能包含英文字母";
+            Message.Error("中文不能包含英文字母");
+            return;
+        }
+        else
+        {
+            chineseInlineError = "";
+        }
+        WordService.AddOrUpdateWord(editWord);
+        editingId = null;
+        Message.Success("行已保存");
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+    }
+
+    private void DeleteRow(Word w)
+    {
+        Logger?.LogInformation("Deleting word Id={Id} English={English}", w.Id, w.English);
+        WordService.DeleteWordById(w.Id);
+        selectedIds.Remove(w.Id);
+        Message.Success($"已删除 {w.English}");
+    }
+
+    private void DeleteSelected()
+    {
+        if (!selectedIds.Any())
+        {
+            Message.Warning("请先勾选要删除的项");
+            return;
+        }
+        foreach (var id in selectedIds.ToList())
+        {
+            WordService.DeleteWordById(id);
+        }
+        selectedIds.Clear();
+        selectAll = false;
+        Message.Success("已批量删除");
+    }
+
+    private async Task HandleExcelInputFile(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null)
+        {
+            Message.Error("未选择文件");
+            return;
+        }
+        try
+        {
+            Logger?.LogInformation("Excel import started. FileName={Name} Size={Size}", file.Name, file.Size);
+            importLoading = true;
+            StateHasChanged();
+            using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+            List<Word> words;
+            if (ext == ".csv")
+            {
+                words = await Task.Run(() => ExcelReader.ReadWordsFromCsv(stream));
+            }
+            else
+            {
+                words = await Task.Run(() => ExcelReader.ReadWordsFromXlsx(stream));
+            }
+            if (words == null || words.Count == 0)
+            {
+                Message.Warning("Excel中未解析到数据");
+                importLoading = false;
+                StateHasChanged();
+                return;
+            }
+            int added = 0, updated = 0;
+            foreach (var w in words)
+            {
+                if (w.Id <= 0)
+                {
+                    Message.Error($"发现缺少有效ID的行：{w.English}/{w.Chinese}，已跳过");
+                    continue;
+                }
+                var exist = WordService.AllWords.FirstOrDefault(x => x.Id == w.Id);
+                if (exist != null)
+                {
+                    updated++;
+                }
+                else
+                {
+                    added++;
+                }
+                WordService.AddOrUpdateWord(w);
+            }
+            Logger?.LogInformation("Excel import finished. Added={Added} Updated={Updated}", added, updated);
+            Message.Success($"导入完成：新增 {added} 条，更新 {updated} 条");
+        }
+        catch (Exception ex)
+        {
+            Message.Error($"导入失败：{ex.Message}");
+            Logger?.LogError(ex, "Excel import failed");
+        }
+        finally
+        {
+            importLoading = false;
+            importVisible = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelected(int id, bool isChecked)
+    {
+        if (isChecked)
+        {
+            selectedIds.Add(id);
+        }
+        else
+        {
+            selectedIds.Remove(id);
+        }
+    }
+
+    private IEnumerable<Word> GetFilteredWords()
+    {
+        if (string.IsNullOrWhiteSpace(searchText)) return WordService.AllWords;
+        var q = searchText.Trim().ToLowerInvariant();
+        return WordService.AllWords.Where(w =>
+            w.English?.ToLowerInvariant().Contains(q) == true
+            || w.Chinese?.ToLowerInvariant().Contains(q) == true
+            || w.Id.ToString().Contains(q));
+    }
+
+    private void ApplySearch()
+    {
+        StateHasChanged();
+    }
+
+    static class ExcelReader
+    {
+        public static List<Word> ReadWordsFromXlsx(Stream stream)
+        {
+            var list = new List<Word>();
+            // NPOI parsing
+            using var mem = new MemoryStream();
+            stream.CopyTo(mem);
+            mem.Position = 0;
+            var wb = new NPOI.XSSF.UserModel.XSSFWorkbook(mem);
+            var sheet = wb.GetSheetAt(0);
+            var headerRowIndex = 0;
+            for (int i = headerRowIndex + 1; i <= sheet.LastRowNum; i++)
+            {
+                var row = sheet.GetRow(i);
+                if (row == null) continue;
+                try
+                {
+                    var idCell = row.GetCell(0);
+                    var engCell = row.GetCell(1);
+                    var posCell = row.GetCell(2);
+                    var cnCell = row.GetCell(3);
+                    int id = 0;
+                    if (idCell != null)
+                    {
+                        if (idCell.CellType == NPOI.SS.UserModel.CellType.Numeric)
+                            id = (int)idCell.NumericCellValue;
+                        else
+                            int.TryParse(idCell.ToString(), out id);
+                    }
+                    var english = engCell?.ToString() ?? "";
+                    var part = posCell?.ToString() ?? "";
+                    var chinese = cnCell?.ToString() ?? "";
+                    if (id <= 0 || string.IsNullOrWhiteSpace(english) || string.IsNullOrWhiteSpace(chinese))
+                    {
+                        continue;
+                    }
+                    list.Add(new Word
+                    {
+                        Id = id,
+                        English = english.Trim(),
+                        PartOfSpeech = part.Trim(),
+                        Chinese = chinese.Trim()
+                    });
+                }
+                catch
+                {
+                    // skip bad row
+                }
+            }
+            return list;
+        }
+
+        public static List<Word> ReadWordsFromCsv(Stream stream)
+        {
+            var list = new List<Word>();
+            stream.Position = 0;
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            string? line;
+            bool isHeader = true;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (isHeader)
+                {
+                    isHeader = false;
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                var cols = line.Split(',');
+                if (cols.Length < 4) continue;
+                if (!int.TryParse(cols[0].Trim(), out var id)) continue;
+                var english = cols[1].Trim();
+                var part = cols[2].Trim();
+                var chinese = cols[3].Trim();
+                if (id <= 0 || string.IsNullOrWhiteSpace(english) || string.IsNullOrWhiteSpace(chinese)) continue;
+                list.Add(new Word
+                {
+                    Id = id,
+                    English = english,
+                    PartOfSpeech = part,
+                    Chinese = chinese
+                });
+            }
+            return list;
+        }
+    }
+
+    private void ToggleSelectAll(bool isChecked)
+    {
+        selectAll = isChecked;
+        selectedIds.Clear();
+        if (isChecked)
+        {
+            foreach (var w in WordService.AllWords)
+            {
+                selectedIds.Add(w.Id);
+            }
+        }
+    }
+ 
+    private void OpenImport()
+    {
+        importVisible = true;
+    }
+
+    private void CloseImport()
+    {
+        importVisible = false;
+    }
+
+    private string GetPosColor(string? pos)
+    {
+        var p = (pos ?? "").ToLowerInvariant();
+        if (p.StartsWith("n")) return "blue";
+        if (p.StartsWith("v")) return "green";
+        if (p.StartsWith("adj")) return "orange";
+        if (p.StartsWith("adv")) return "purple";
+        if (string.IsNullOrWhiteSpace(p)) return "default";
+        return "cyan";
+    }
+
+    private bool IsEnglishText(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(s, "^[\\u0020-\\u007E]+$");
+    }
+
+    private bool IsChineseText(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        return !System.Text.RegularExpressions.Regex.IsMatch(s, "[A-Za-z]");
+    }
+}

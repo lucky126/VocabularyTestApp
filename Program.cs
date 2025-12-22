@@ -15,6 +15,7 @@ builder.Services.AddAntDesign();
 builder.Services.AddSingleton<WordService>();
 builder.Services.AddHttpClient<CozeGradingService>();
 builder.Services.AddScoped<CozeGradingService>();
+builder.Services.AddSingleton<AdminAuthService>();
 
 var app = builder.Build();
 
