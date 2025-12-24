@@ -1,6 +1,6 @@
 # Vocabulary Test App (词汇测试应用)
 
-这是一个基于 Blazor Server 的词汇测试与评分应用，集成了 Coze 工作流以实现 AI 驱动的手写识别功能。应用已针对移动端进行深度优化，支持多端自适应布局。
+这是一个基于 Blazor Server 的词汇测试与评分应用，集成了 Coze 工作流以实现 AI 驱动的手写识别功能。应用针对移动端进行了优化，支持多端自适应布局。
 
 ## 功能特性
 
@@ -20,62 +20,113 @@
 
 ## 环境要求
 
-*   .NET 7.0 SDK
-*   Coze API Token 和 Workflow ID（用于自动评分功能）
+- 使用安装包：无需 .NET SDK
+- 从源码运行：.NET 9.0 SDK
+- Coze 的 ApiToken 与 WorkflowId（用于自动评分）
 
-## 安装与设置
+## 安装包使用
 
-1.  **克隆仓库**
-    ```bash
-    git clone https://github.com/lucky126/VocabularyTestApp.git
-    cd VocabularyTestApp
-    ```
+1. 准备 Coze 资源  
+   在安装程序所在目录，找到提供的 zip 资源包，先导入到 Coze 空间（https://www.coze.cn/space/），创建工作流并拿到 `WorkflowId`。
 
-2.  **配置**
-    应用需要 Coze API 凭证才能正常工作。这些敏感信息不应提交到版本控制中。
+2. 运行安装程序  
+   双击 `Installer/Output/VocabularyTestApp_Setup.exe` 按向导完成安装：
+   - 管理员配置：设置用于后台登录的账号与密码（路径 ` /admin/login`）
+   - Coze 配置：填写 `ApiToken` 与 `WorkflowId`（均为必填）
+   - 网络配置：设置端口（默认 `5267`；如启用 HTTPS，则使用 `端口+1`）
+   - 安装选项：可选启用 HTTPS、允许局域网访问（添加防火墙规则）、随登录自启
 
-    在项目根目录（`appsettings.json` 旁边）创建一个名为 `appsettings.Secret.json` 的文件，内容如下：
+3. 安装完成提示  
+   完成后弹窗会显示后台登录地址，例如：
+   - 仅 HTTP：`http://localhost:5267/admin/login`
+   - HTTP + HTTPS：同时显示 `https://localhost:5268/admin/login`
 
-    ```json
-    {
-      "Coze": {
-        "ApiToken": "你的_真实_API_TOKEN",
-        "WorkflowId": "你的_真实_WORKFLOW_ID"
-      }
-    }
-    ```
+4. 快捷方式与启动参数  
+   桌面与开始菜单快捷方式会携带 `--urls` 参数，形如：
+   ```
+   VocabularyTestApp.exe --urls "http://0.0.0.0:5267;https://0.0.0.0:5268"
+   ```
 
-    *注意：`appsettings.Secret.json` 已配置为被 Git 忽略。*
+5. 敏感配置  
+   安装过程会自动生成 `appsettings.Secret.json` 并写入管理员与 Coze 配置；该文件位于安装目录。
 
-3.  **运行应用**
+## 从源码运行
 
-    **本地开发模式：**
-    ```bash
-    dotnet run
-    ```
-    或者使用热重载：
-    ```bash
-    dotnet watch run
-    ```
+1. 克隆仓库
+   ```bash
+   git clone https://github.com/lucky126/VocabularyTestApp.git
+   cd VocabularyTestApp
+   ```
 
-    **局域网访问模式（推荐）：**
-    如果需要通过手机或其他设备在同一局域网内访问，请使用以下命令启动：
-    ```bash
-    dotnet run --urls "http://0.0.0.0:5267"
-    ```
-    启动后，通过 `ipconfig` (Windows) 或 `ifconfig` (Linux/Mac) 查看本机 IP（例如 `192.168.1.x`），然后在手机浏览器访问 `http://192.168.1.x:5267`。
+2. 本地配置（源码模式）  
+   在项目根目录创建 `appsettings.Secret.json`：
+   ```json
+   {
+     "Coze": {
+       "ApiToken": "你的_真实_API_TOKEN",
+       "WorkflowId": "你的_真实_WORKFLOW_ID"
+     },
+     "Admin": {
+       "Username": "admin",
+       "Password": "至少6位密码"
+     }
+   }
+   ```
+   该文件已被 Git 忽略。
 
-4.  **访问应用**
-    打开浏览器并访问 `https://localhost:7196`（或控制台中显示的 URL）。
+3. 运行
+   - 开发模式：
+     ```bash
+     dotnet run
+     ```
+   - 热重载：
+     ```bash
+     dotnet watch run
+     ```
+   - 局域网访问（推荐）：
+     ```bash
+     dotnet run --urls "http://0.0.0.0:5267"
+     ```
+     在手机浏览器访问：`http://<你的局域网IP>:5267`
 
 ## 使用说明
 
-1.  **配置测试**：选择单词数量和测试模式（英->中 或 中->英）。
-2.  **进行测试**：在纸上写下你的答案，并在题号前标注 1 到 N。
-3.  **评分**：
-    *   **自动**：点击相机图标上传答题纸照片。AI 将识别文本并与正确答案比对进行评分。
-    *   **人工**：手动标记答案正确与否。
-4.  **统计**：查看历史成绩并回顾过往试卷。
+- 配置测试：选择单词数量和测试模式（英→中 或 中→英）
+- 进行测试：书写答案并标注题号
+- 评分：
+  - 自动：上传答题纸照片，调用 Coze 工作流识别并评分
+  - 人工：手动核对与评分
+- 统计：查看历史成绩与识别明细
+
+## 常见问题（FAQ）
+
+- 端口被占用
+  - 安装向导中更换端口，或启动参数 `--urls` 修改端口
+  - 检查占用：`netstat -ano | findstr :5267`，结束对应进程后重试
+
+- 局域网访问失败
+  - 安装时勾选“允许局域网访问”，系统将添加防火墙入站规则
+  - 访问地址格式：`http://<你的电脑IP>:<端口>`
+  - 若仍失败，手动添加规则或关闭第三方安全软件拦截
+
+- HTTPS 无法启动
+  - 安装 .NET 开发证书并信任：`dotnet dev-certs https --trust`
+  - 或在安装选项中取消启用 HTTPS，仅使用 HTTP
+
+- 后台登录不了
+  - 登录路径：`/admin/login`
+  - 管理员用户名与密码由安装向导设置；忘记可编辑安装目录中的 `appsettings.Secret.json` 后重启
+
+- Coze 接口报错（401/参数错误）
+  - 确认已将安装目录旁提供的 zip 资源导入到 Coze 并创建工作流
+  - 检查 `ApiToken` 与 `WorkflowId` 是否填写正确（可在 `appsettings.Secret.json` 中更新后重启）
+
+- 修改启动地址
+  - 桌面/开始菜单快捷方式包含 `--urls` 参数；可在属性中修改
+  - 自动启动项位置：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值名 `VocabularyTestApp`）
+
+- 卸载后防火墙规则未删除
+  - 手动执行：`netsh advfirewall firewall delete rule name="VocabularyTestApp"`
 
 ## 许可证
 
